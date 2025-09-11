@@ -1,0 +1,86 @@
+<!-- _includes/pdf_viewer.html -->
+<style>
+  /* small, local styles so multiple viewers can coexist */
+  .pdf-viewer-container-{{ include.id | default: 'pdf' }} {
+    white-space: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    height: {{ include.height | default: '80vh' }};
+    border: 1px solid #ddd;
+    padding: 10px;
+    background: #fafafa;
+  }
+  .pdf-viewer-canvas {
+    display: inline-block;
+    vertical-align: top;
+    margin-right: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    max-height: 100%;
+  }
+  .pdf-viewer-status { font-size: 0.95rem; color: #666; padding: 0.5rem; }
+</style>
+
+<div id="pdf-viewer-{{ include.id | default: 'pdf' }}"
+     class="pdf-viewer-container-{{ include.id | default: 'pdf' }}">
+  <div id="pdf-status-{{ include.id | default: 'pdf' }}" class="pdf-viewer-status">Loading PDF…</div>
+</div>
+
+<!-- PDF.js core -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+<script>
+(function(){
+  const containerId = 'pdf-viewer-{{ include.id | default: 'pdf' }}';
+  const fileUrl = '{{ include.file | relative_url }}';
+  const scale = Number({{ include.scale | default: '1.2' }});
+
+  const container = document.getElementById(containerId);
+  const statusEl = document.getElementById('pdf-status-{{ include.id | default: 'pdf' }}');
+
+  if (!window.pdfjsLib) {
+    console.error('PDF.js (pdfjsLib) not loaded.');
+    statusEl.textContent = 'Error: PDF.js failed to load. Check console.';
+    return;
+  }
+
+  // IMPORTANT: point workerSrc to the matching pdf.worker for the pdf.js version above
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.worker.min.js';
+
+  function init() {
+    const loadingTask = pdfjsLib.getDocument(fileUrl);
+    loadingTask.promise.then(pdf => {
+      // clear status
+      statusEl.textContent = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        pdf.getPage(i).then(page => {
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.className = 'pdf-viewer-canvas';
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          canvas.style.maxHeight = '100%';
+
+          const ctx = canvas.getContext('2d');
+          container.appendChild(canvas);
+
+          page.render({ canvasContext: ctx, viewport: viewport })
+            .promise
+            .catch(err => console.error('Page render error', err));
+        }).catch(err => {
+          console.error('getPage error', err);
+        });
+      }
+    }).catch(err => {
+      console.error('PDF load error', err);
+      statusEl.textContent = 'Failed to load PDF — check URL, permissions or CORS. See console.';
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
